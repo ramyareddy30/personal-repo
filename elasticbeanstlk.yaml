@@ -1,0 +1,927 @@
+---
+AWSTemplateFormatVersion: '2010-09-09'
+Description: 'AWS CloudFormation Template ElasticBeanstalk running Java application'
+Parameters:
+  AWSRegion:
+    Description: AWS Region name
+    Type: String
+    Default: us-west-2
+  ApplicationName:
+    Description: Application name
+    Type: String
+    MinLength: '3'
+    MaxLength: '100'
+    Default: hbf
+    AllowedPattern: "^[\\w-]*$"
+    ConstraintDescription: must be a valid string Alphanumeric + _ and -
+  IsNewApplication:
+    Type: String
+    Description: If yes, It will launch the new application and create environment inside it.
+    AllowedValues:
+    - 'yes'
+    - 'no'
+    Default: 'no'
+  EnvironmentName:
+    Description: Environment Name
+    Type: String
+    MinLength: '3'
+    MaxLength: '20'
+    Default: development
+    AllowedPattern: "^[\\w-]*$"
+    ConstraintDescription: must be a valid string Alphanumeric + _ and -
+  AppSubnets:
+    Type: List<AWS::EC2::Subnet::Id>
+    Description: Select two subnets in different Availability Zones!
+  ElbSubnets: 
+    Type: List<AWS::EC2::Subnet::Id>
+    Description: Select two subnets in different Availability Zones!
+  KeyName:
+    Description: Name of an existing EC2 KeyPair to enable SSH access to the Elastic
+      Beanstalk hosts
+    Type: AWS::EC2::KeyPair::KeyName
+    Default: hello-world-app-ec2-key-pair
+    ConstraintDescription: must be the name of an existing EC2 KeyPair.
+  EC2InstanceType:
+    Description: EC2 instance type
+    Type: String
+    Default: t2.micro
+    AllowedValues:
+      - t2.micro
+      - t2.small
+      - t2.medium
+      - t2.large
+      - t2.xlarge
+      - t2.2xlarge
+      - m3.medium
+      - m3.large
+      - m3.xlarge
+      - m3.2xlarge
+      - c3.large
+      - c3.xlarge
+      - c3.2xlarge
+      - c3.4xlarge
+      - c3.8xlarge
+      - t1.micro
+      - t2.nano
+      - m1.small
+      - m1.medium
+      - m1.large
+      - m1.xlarge
+      - c1.medium
+      - c1.xlarge
+      - c4.large
+      - c4.xlarge
+      - c4.2xlarge
+      - c4.4xlarge
+      - c4.8xlarge
+      - c5.large
+      - c5.xlarge
+      - c5.2xlarge
+      - c5.4xlarge
+      - c5.9xlarge
+      - c5.18xlarge
+      - m2.xlarge
+      - m2.2xlarge
+      - m2.4xlarge
+      - r4.large
+      - r4.xlarge
+      - r4.2xlarge
+      - r4.4xlarge
+      - r4.8xlarge
+      - r4.16xlarge
+      - m4.large
+      - m4.xlarge
+      - m4.2xlarge
+      - m4.4xlarge
+      - m4.10xlarge
+      - m4.16xlarge
+      - cc2.8xlarge
+      - hi1.4xlarge
+      - hs1.8xlarge
+      - cr1.8xlarge
+      - g2.2xlarge
+      - g2.8xlarge
+      - p2.xlarge
+      - p2.8xlarge
+      - p2.16xlarge
+      - p3.2xlarge
+      - p3.8xlarge
+      - p3.16xlarge
+      - i2.xlarge
+      - i2.2xlarge
+      - i2.4xlarge
+      - i2.8xlarge
+      - i3.large
+      - i3.xlarge
+      - i3.2xlarge
+      - i3.4xlarge
+      - i3.8xlarge
+      - i3.16xlarge
+      - r3.large
+      - r3.xlarge
+      - r3.2xlarge
+      - r3.4xlarge
+      - r3.8xlarge
+      - d2.xlarge
+      - d2.2xlarge
+      - d2.4xlarge
+      - d2.8xlarge
+      - x1.16xlarge
+      - x1.32xlarge
+      - x1e.xlarge
+      - x1e.2xlarge
+      - x1e.4xlarge
+      - x1e.8xlarge
+      - x1e.16xlarge
+      - x1e.32xlarge
+      - f1.2xlarge
+      - f1.16xlarge
+      - g3.4xlarge
+      - g3.8xlarge
+      - g3.16xlarge
+      - h1.2xlarge
+      - h1.4xlarge
+      - h1.8xlarge
+      - h1.16xlarge
+      - m5.large
+      - m5.xlarge
+      - m5.2xlarge
+      - m5.4xlarge
+      - m5.12xlarge
+      - m5.24xlarge
+    ConstraintDescription: must be a valid EC2 instance type.
+  SSHLocation:
+    Description: Lockdown SSH access to the Beasntalk EC2 instances (default can be
+      accessed from anywhere)
+    Type: String
+    MinLength: '9'
+    MaxLength: '18'
+    Default: 10.0.0.0/16
+    AllowedPattern: "(\\d{1,3})\\.(\\d{1,3})\\.(\\d{1,3})\\.(\\d{1,3})/(\\d{1,2})"
+    ConstraintDescription: must be a valid CIDR range of the form x.x.x.x/x.
+  AutoScalingGroupMinSize:
+    Description: Minimum number of instances you want in your Auto Scaling group.
+    Type: Number
+    Default: '1'
+    ConstraintDescription: must be a valid integer value.
+  AutoScalingGroupMaxSize:
+    Description: Maximum number of instances you want in your Auto Scaling group.
+    Type: Number
+    Default: '6'
+    ConstraintDescription: must be a valid integer value.
+  RollingUpdateEnabled:
+    Type: String
+    Description: If true, enables rolling updates for an environment. Rolling updates
+      are useful when you need to make small, frequent updates to your Elastic Beanstalk
+      software application and you want to avoid application downtime.
+    AllowedValues:
+    - 'true'
+    - 'false'
+    Default: 'true'
+  RollingUpdateType:
+    Type: String
+    Description: Time-based rolling updates apply a PauseTime between batches. Health-based
+      rolling updates wait for new instances to pass health checks before moving on
+      to the next batch. Immutable updates launch a full set of instances in a new
+      AutoScaling group.
+    AllowedValues:
+    - Time
+    - Health
+    - Immutable
+    Default: Immutable
+  StreamLogs:
+    Type: String
+    Description: Whether to create groups in CloudWatch logs for proxy and deployment
+      logs, and stream logs from each instance in your environment.
+    AllowedValues:
+    - 'true'
+    - 'false'
+    Default: 'true'
+  StreamLogsDeleteOnTerminate:
+    Type: String
+    Description: Whether to delete the log groups when the environment is terminated.
+      If false, the logs are kept RetentionDays days.
+    AllowedValues:
+    - 'true'
+    - 'false'
+    Default: 'true'
+  StreamLogsRetentionInDays:
+    Description: The number of days to keep log events before they expire.
+    Type: Number
+    Default: '7'
+    AllowedValues:
+    - '1'
+    - '3'
+    - '5'
+    - '7'
+    - '14'
+    - '30'
+    - '60'
+    - '90'
+    - '120'
+    - '150'
+    - '180'
+    - '365'
+    - '400'
+    - '545'
+    - '731'
+    - '1827'
+    - '3653'
+  DeploymentPolicy:
+    Type: String
+    Description: Choose a deployment policy for application version deployments.
+    AllowedValues:
+    - AllAtOnce
+    - Rolling
+    - RollingWithAdditionalBatch
+    - Immutable
+    Default: Immutable
+  LogPublicationControl:
+    Type: String
+    Description: Copy the log files for your application's Amazon EC2 instances to
+      the Amazon S3 bucket associated with your application.
+    AllowedValues:
+    - 'true'
+    - 'false'
+    Default: 'true'
+  ELBCrossZone:
+    Type: String
+    Description: Configure the load balancer to route traffic evenly across all instances
+      in all Availability Zones rather than only within each zone.
+    AllowedValues:
+    - 'true'
+    - 'false'
+    Default: 'true'
+  HealtReportingType:
+    Type: String
+    Description: Health reporting system (basic or enhanced). Enhanced health reporting
+      requires a service role and a version 2 platform configuration.
+    AllowedValues:
+    - basic
+    - enhanced
+    Default: enhanced
+  EnvironmentType:
+    Type: String
+    Description: Set to SingleInstance to launch one EC2 instance with no load balancer.
+    AllowedValues:
+    - SingleInstance
+    - LoadBalanced
+    Default: LoadBalanced
+  OperatorEmail:
+    Description: Email address to notify if there are any operational issues
+    Type: String
+    Default: youremail@gmail.com
+    AllowedPattern: "([a-zA-Z0-9_\\-\\.]+)@((\\[[0-9]{1,3}\\.[0-9]{1,3}\\.[0-9]{1,3}\\.)|(([a-zA-Z0-9\\-]+\\.)+))([a-zA-Z]{2,4}|[0-9]{1,3})(\\]?)"
+    ConstraintDescription: must be a valid email address.
+  ApplicationS3Bucket:
+    Description: Application path in s3
+    Type: String
+    Default: elasticbeanstalk-samples-us-west-2
+  ApplicationS3Artifact:
+    Description: Application artifact file
+    Type: String
+    Default: java-sample-app-v3.zip
+  VPC: 
+    Type: "AWS::EC2::VPC::Id" 
+    Description: Enter a valid vpc
+
+  ACMCertificateArn:
+    Description: The SSL/TLS certificate ARN for loadbalancer
+    Type: String
+    MinLength: 0
+    MaxLength: 2048
+    Default: ''
+  LoadBalancerScheme:
+    Description: Indicates whether the load balancer in front of the Ec2 service is internet-facing or internal.
+    Type: String
+    Default: 'internet-facing'
+    AllowedValues:
+    - 'internet-facing'
+    - internal
+
+
+Conditions: 
+  TlsEnabled: !Not [ !Equals [ !Ref ACMCertificateArn, "" ] ]
+  CreateApplicationnew: !Equals [ !Ref IsNewApplication, "yes" ]
+  CreateApplication: !Not [ !Equals [ !Ref IsNewApplication, "no" ] ]
+
+Mappings:
+  AWSInstanceType2Arch:
+    t1.micro:
+      Arch: PV64
+    t2.nano:
+      Arch: HVM64
+    t2.micro:
+      Arch: HVM64
+    t2.small:
+      Arch: HVM64
+    t2.medium:
+      Arch: HVM64
+    t2.large:
+      Arch: HVM64
+    m1.small:
+      Arch: PV64
+    m1.medium:
+      Arch: PV64
+    m1.large:
+      Arch: PV64
+    m1.xlarge:
+      Arch: PV64
+    m2.xlarge:
+      Arch: PV64
+    m2.2xlarge:
+      Arch: PV64
+    m2.4xlarge:
+      Arch: PV64
+    m3.medium:
+      Arch: HVM64
+    m3.large:
+      Arch: HVM64
+    m3.xlarge:
+      Arch: HVM64
+    m3.2xlarge:
+      Arch: HVM64
+    m4.large:
+      Arch: HVM64
+    m4.xlarge:
+      Arch: HVM64
+    m4.2xlarge:
+      Arch: HVM64
+    m4.4xlarge:
+      Arch: HVM64
+    m4.10xlarge:
+      Arch: HVM64
+    c1.medium:
+      Arch: PV64
+    c1.xlarge:
+      Arch: PV64
+    c3.large:
+      Arch: HVM64
+    c3.xlarge:
+      Arch: HVM64
+    c3.2xlarge:
+      Arch: HVM64
+    c3.4xlarge:
+      Arch: HVM64
+    c3.8xlarge:
+      Arch: HVM64
+    c4.large:
+      Arch: HVM64
+    c4.xlarge:
+      Arch: HVM64
+    c4.2xlarge:
+      Arch: HVM64
+    c4.4xlarge:
+      Arch: HVM64
+    c4.8xlarge:
+      Arch: HVM64
+    g2.2xlarge:
+      Arch: HVMG2
+    g2.8xlarge:
+      Arch: HVMG2
+    r3.large:
+      Arch: HVM64
+    r3.xlarge:
+      Arch: HVM64
+    r3.2xlarge:
+      Arch: HVM64
+    r3.4xlarge:
+      Arch: HVM64
+    r3.8xlarge:
+      Arch: HVM64
+    i2.xlarge:
+      Arch: HVM64
+    i2.2xlarge:
+      Arch: HVM64
+    i2.4xlarge:
+      Arch: HVM64
+    i2.8xlarge:
+      Arch: HVM64
+    d2.xlarge:
+      Arch: HVM64
+    d2.2xlarge:
+      Arch: HVM64
+    d2.4xlarge:
+      Arch: HVM64
+    d2.8xlarge:
+      Arch: HVM64
+    hi1.4xlarge:
+      Arch: HVM64
+    hs1.8xlarge:
+      Arch: HVM64
+    cr1.8xlarge:
+      Arch: HVM64
+    cc2.8xlarge:
+      Arch: HVM64
+  AWSInstanceType2NATArch:
+    t1.micro:
+      Arch: NATPV64
+    t2.nano:
+      Arch: NATHVM64
+    t2.micro:
+      Arch: NATHVM64
+    t2.small:
+      Arch: NATHVM64
+    t2.medium:
+      Arch: NATHVM64
+    t2.large:
+      Arch: NATHVM64
+    m1.small:
+      Arch: NATPV64
+    m1.medium:
+      Arch: NATPV64
+    m1.large:
+      Arch: NATPV64
+    m1.xlarge:
+      Arch: NATPV64
+    m2.xlarge:
+      Arch: NATPV64
+    m2.2xlarge:
+      Arch: NATPV64
+    m2.4xlarge:
+      Arch: NATPV64
+    m3.medium:
+      Arch: NATHVM64
+    m3.large:
+      Arch: NATHVM64
+    m3.xlarge:
+      Arch: NATHVM64
+    m3.2xlarge:
+      Arch: NATHVM64
+    m4.large:
+      Arch: NATHVM64
+    m4.xlarge:
+      Arch: NATHVM64
+    m4.2xlarge:
+      Arch: NATHVM64
+    m4.4xlarge:
+      Arch: NATHVM64
+    m4.10xlarge:
+      Arch: NATHVM64
+    c1.medium:
+      Arch: NATPV64
+    c1.xlarge:
+      Arch: NATPV64
+    c3.large:
+      Arch: NATHVM64
+    c3.xlarge:
+      Arch: NATHVM64
+    c3.2xlarge:
+      Arch: NATHVM64
+    c3.4xlarge:
+      Arch: NATHVM64
+    c3.8xlarge:
+      Arch: NATHVM64
+    c4.large:
+      Arch: NATHVM64
+    c4.xlarge:
+      Arch: NATHVM64
+    c4.2xlarge:
+      Arch: NATHVM64
+    c4.4xlarge:
+      Arch: NATHVM64
+    c4.8xlarge:
+      Arch: NATHVM64
+    g2.2xlarge:
+      Arch: NATHVMG2
+    g2.8xlarge:
+      Arch: NATHVMG2
+    r3.large:
+      Arch: NATHVM64
+    r3.xlarge:
+      Arch: NATHVM64
+    r3.2xlarge:
+      Arch: NATHVM64
+    r3.4xlarge:
+      Arch: NATHVM64
+    r3.8xlarge:
+      Arch: NATHVM64
+    i2.xlarge:
+      Arch: NATHVM64
+    i2.2xlarge:
+      Arch: NATHVM64
+    i2.4xlarge:
+      Arch: NATHVM64
+    i2.8xlarge:
+      Arch: NATHVM64
+    d2.xlarge:
+      Arch: NATHVM64
+    d2.2xlarge:
+      Arch: NATHVM64
+    d2.4xlarge:
+      Arch: NATHVM64
+    d2.8xlarge:
+      Arch: NATHVM64
+    hi1.4xlarge:
+      Arch: NATHVM64
+    hs1.8xlarge:
+      Arch: NATHVM64
+    cr1.8xlarge:
+      Arch: NATHVM64
+    cc2.8xlarge:
+      Arch: NATHVM64
+  AWSRegionArch2AMI:
+    us-east-1:
+      PV64: ami-2a69aa47
+      HVM64: ami-6869aa05
+      HVMG2: ami-61e27177
+    us-west-2:
+      PV64: ami-7f77b31f
+      HVM64: ami-7172b611
+      HVMG2: ami-60aa3700
+    us-west-1:
+      PV64: ami-a2490dc2
+      HVM64: ami-31490d51
+      HVMG2: ami-4b694d2b
+    eu-west-1:
+      PV64: ami-4cdd453f
+      HVM64: ami-f9dd458a
+      HVMG2: ami-2955524f
+    eu-west-2:
+      PV64: NOT_SUPPORTED
+      HVM64: ami-886369ec
+      HVMG2: NOT_SUPPORTED
+    eu-central-1:
+      PV64: ami-6527cf0a
+      HVM64: ami-ea26ce85
+      HVMG2: ami-81ac71ee
+    ap-northeast-1:
+      PV64: ami-3e42b65f
+      HVM64: ami-374db956
+      HVMG2: ami-46220c21
+    ap-northeast-2:
+      PV64: NOT_SUPPORTED
+      HVM64: ami-2b408b45
+      HVMG2: NOT_SUPPORTED
+    ap-southeast-1:
+      PV64: ami-df9e4cbc
+      HVM64: ami-a59b49c6
+      HVMG2: ami-c212aba1
+    ap-southeast-2:
+      PV64: ami-63351d00
+      HVM64: ami-dc361ebf
+      HVMG2: ami-0ad2db69
+    ap-south-1:
+      PV64: NOT_SUPPORTED
+      HVM64: ami-ffbdd790
+      HVMG2: ami-ca3042a5
+    us-east-2:
+      PV64: NOT_SUPPORTED
+      HVM64: ami-f6035893
+      HVMG2: NOT_SUPPORTED
+    ca-central-1:
+      PV64: NOT_SUPPORTED
+      HVM64: ami-730ebd17
+      HVMG2: NOT_SUPPORTED
+    sa-east-1:
+      PV64: ami-1ad34676
+      HVM64: ami-6dd04501
+      HVMG2: NOT_SUPPORTED
+    cn-north-1:
+      PV64: ami-77559f1a
+      HVM64: ami-8e6aa0e3
+      HVMG2: NOT_SUPPORTED
+  AWSNATRegionArch2AMI:
+    us-east-1:
+      NATPV64: ami-c02b04a8
+      NATHVM64: ami-4868ab25
+    us-west-2:
+      NATPV64: ami-2dae821d
+      NATHVM64: ami-a275b1c2
+    us-west-1:
+      NATPV64: ami-67a54423
+      NATHVM64: ami-004b0f60
+    eu-west-1:
+      NATPV64: ami-cb7de3bc
+      NATHVM64: ami-a8dd45db
+    eu-west-2:
+      NATPV64: NOT_SUPPORTED
+      NATHVM64: ami-6b4d470f
+    eu-central-1:
+      NATPV64: ami-3604392b
+      NATHVM64: ami-5825cd37
+    ap-northeast-1:
+      NATPV64: ami-c7e016c7
+      NATHVM64: ami-2443b745
+    ap-northeast-2:
+      NATPV64: NOT_SUPPORTED
+      NATHVM64: ami-d14388bf
+    ap-southeast-1:
+      NATPV64: ami-b098a9e2
+      NATHVM64: ami-a79b49c4
+    ap-southeast-2:
+      NATPV64: ami-0fed9d35
+      NATHVM64: ami-53371f30
+    ap-south-1:
+      NATPV64: NOT_SUPPORTED
+      NATHVM64: ami-e2b9d38d
+    us-east-2:
+      NATPV64: NOT_SUPPORTED
+      NATHVM64: ami-92a6fef7
+    ca-central-1:
+      NATPV64: NOT_SUPPORTED
+      NATHVM64: ami-32f14356
+    sa-east-1:
+      NATPV64: ami-93fb408e
+      NATHVM64: ami-9336bcff
+    cn-north-1:
+      NATPV64: ami-bc3fad85
+      NATHVM64: ami-7b549e16
+  Region2Principal:
+    us-east-1:
+      EC2Principal: ec2.amazonaws.com
+      OpsWorksPrincipal: opsworks.amazonaws.com
+    us-west-2:
+      EC2Principal: ec2.amazonaws.com
+      OpsWorksPrincipal: opsworks.amazonaws.com
+    us-west-1:
+      EC2Principal: ec2.amazonaws.com
+      OpsWorksPrincipal: opsworks.amazonaws.com
+    eu-west-1:
+      EC2Principal: ec2.amazonaws.com
+      OpsWorksPrincipal: opsworks.amazonaws.com
+    eu-west-2:
+      EC2Principal: ec2.amazonaws.com
+      OpsWorksPrincipal: opsworks.amazonaws.com
+    ap-southeast-1:
+      EC2Principal: ec2.amazonaws.com
+      OpsWorksPrincipal: opsworks.amazonaws.com
+    ap-northeast-1:
+      EC2Principal: ec2.amazonaws.com
+      OpsWorksPrincipal: opsworks.amazonaws.com
+    ap-northeast-2:
+      EC2Principal: ec2.amazonaws.com
+      OpsWorksPrincipal: opsworks.amazonaws.com
+    ap-southeast-2:
+      EC2Principal: ec2.amazonaws.com
+      OpsWorksPrincipal: opsworks.amazonaws.com
+    ap-south-1:
+      EC2Principal: ec2.amazonaws.com
+      OpsWorksPrincipal: opsworks.amazonaws.com
+    us-east-2:
+      EC2Principal: ec2.amazonaws.com
+      OpsWorksPrincipal: opsworks.amazonaws.com
+    ca-central-1:
+      EC2Principal: ec2.amazonaws.com
+      OpsWorksPrincipal: opsworks.amazonaws.com
+    sa-east-1:
+      EC2Principal: ec2.amazonaws.com
+      OpsWorksPrincipal: opsworks.amazonaws.com
+    cn-north-1:
+      EC2Principal: ec2.amazonaws.com.cn
+      OpsWorksPrincipal: opsworks.amazonaws.com.cn
+    eu-central-1:
+      EC2Principal: ec2.amazonaws.com
+      OpsWorksPrincipal: opsworks.amazonaws.com
+
+Resources:
+
+  NotificationTopic:
+    Type: AWS::SNS::Topic
+    Properties:
+      Subscription:
+      - Endpoint:
+          Ref: OperatorEmail
+        Protocol: email
+  ServiceRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+        - Effect: Allow
+          Principal:
+            Service: elasticbeanstalk.amazonaws.com
+          Condition:
+            StringEquals:
+              sts:ExternalId: elasticbeanstalk
+          Action:
+          - sts:AssumeRole
+      ManagedPolicyArns:
+      - arn:aws:iam::aws:policy/service-role/AWSElasticBeanstalkEnhancedHealth
+      - arn:aws:iam::aws:policy/service-role/AWSElasticBeanstalkService
+  InstancesRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Statement:
+        - Effect: Allow
+          Principal:
+            Service:
+            - Fn::FindInMap:
+              - Region2Principal
+              - Ref: AWS::Region
+              - EC2Principal
+          Action:
+          - sts:AssumeRole
+      ManagedPolicyArns:
+      - arn:aws:iam::aws:policy/AmazonS3FullAccess
+      Path: "/"
+      RoleName: elasticbeanstalk-ec2-role
+#  InstancesRolePolicy:
+#    Type: AWS::IAM::Policy
+#    Properties:
+#      PolicyName: InstancesRole
+#      PolicyDocument:
+#        Statement:
+#        - Effect: Allow
+#          NotAction: s3:*
+#          Resource: "*"
+#      Roles:
+#      - Ref: InstancesRole
+  EBServerInstanceProfile:
+    Type: AWS::IAM::InstanceProfile
+    Properties:
+      Path: "/"
+      Roles:
+      - Ref: InstancesRole
+  Hbf:
+    Type: AWS::ElasticBeanstalk::Application
+    Condition: CreateApplicationnew
+    Properties:
+      ApplicationName:
+        Ref: ApplicationName
+      Description: AWS Elastic Beanstalk JAva Hello World Application
+  HbfVersion:
+    Type: AWS::ElasticBeanstalk::ApplicationVersion
+    Properties:
+      Description: 1.0.0
+      ApplicationName: !If [ CreateApplication, !Ref Hbf, !Ref ApplicationName ]
+      SourceBundle:
+        S3Bucket:
+          Ref: ApplicationS3Bucket
+        S3Key:
+          Ref: ApplicationS3Artifact
+  HbfConfigTemplate:
+    Type: AWS::ElasticBeanstalk::ConfigurationTemplate
+    Properties:
+      ApplicationName: !If [ CreateApplication, !Ref Hbf, !Ref ApplicationName ]
+      Description: AWS Elastic Beanstalk Environment running Node.js Hello World Application
+      EnvironmentId: ''
+      SolutionStackName: 64bit Amazon Linux 2017.09 v2.6.8 running Java 8
+      OptionSettings: 
+      - Namespace: aws:elb:loadbalancer
+        OptionName: CrossZone
+        Value:
+          Ref: ELBCrossZone
+      - Namespace: aws:elasticbeanstalk:environment
+        OptionName: LoadBalancerType
+        Value: application
+      - Namespace: aws:ec2:vpc
+        OptionName: VPCId
+        Value: !Ref VPC 
+      - Namespace: aws:ec2:vpc
+        OptionName: Subnets
+        Value: !Join [",", [!Select [0, !Ref AppSubnets], !Select [1, !Ref AppSubnets], !Select [2, !Ref AppSubnets]]]
+      - Namespace: aws:ec2:vpc
+        OptionName: ELBScheme
+        Value: !Ref LoadBalancerScheme
+      - Namespace: aws:ec2:vpc
+        OptionName: ELBSubnets
+        Value: !Join [",", [!Select [0, !Ref ElbSubnets], !Select [1, !Ref ElbSubnets], !Select [2, !Ref ElbSubnets]]]
+      - Namespace: aws:elb:listener:443
+        OptionName: ListenerProtocol
+        Value: TCP
+      - Namespace: aws:elb:listener:443
+        OptionName: InstancePort
+        Value: '443'
+      - Namespace: aws:elb:listener:443
+        OptionName: InstanceProtocol
+        Value: TCP
+      - Namespace: aws:elb:listener:443
+        OptionName: ListenerEnabled
+        Value: 'true'
+      - Namespace: aws:elasticbeanstalk:environment
+        OptionName: EnvironmentType
+        Value:
+          Ref: EnvironmentType
+      - Namespace: aws:elasticbeanstalk:environment
+        OptionName: ServiceRole
+        Value:
+          Ref: ServiceRole
+      - Namespace: aws:elasticbeanstalk:sns:topics
+        OptionName: Notification Protocol
+        Value: email
+      - Namespace: aws:elasticbeanstalk:sns:topics
+        OptionName: Notification Endpoint
+        Value:
+          Ref: OperatorEmail
+      - Namespace: aws:elasticbeanstalk:sns:topics
+        OptionName: Notification Topic ARN
+        Value:
+          Ref: NotificationTopic
+      - Namespace: aws:autoscaling:launchconfiguration
+        OptionName: EC2KeyName
+        Value:
+          Ref: KeyName
+      - Namespace: aws:autoscaling:launchconfiguration
+        OptionName: InstanceType
+        Value: !Ref EC2InstanceType 
+      - Namespace: aws:autoscaling:launchconfiguration
+        OptionName: IamInstanceProfile
+        Value:
+          Ref: EBServerInstanceProfile
+      - Namespace: aws:elasticbeanstalk:healthreporting:system
+        OptionName: SystemType
+        Value:
+          Ref: HealtReportingType
+      - Namespace: aws:autoscaling:asg
+        OptionName: MinSize
+        Value:
+          Ref: AutoScalingGroupMinSize
+      - Namespace: aws:autoscaling:asg
+        OptionName: MaxSize
+        Value:
+          Ref: AutoScalingGroupMaxSize
+      - Namespace: aws:autoscaling:updatepolicy:rollingupdate
+        OptionName: RollingUpdateEnabled
+        Value:
+          Ref: RollingUpdateEnabled
+      - Namespace: aws:autoscaling:updatepolicy:rollingupdate
+        OptionName: RollingUpdateType
+        Value:
+          Ref: RollingUpdateType
+      - Namespace: aws:elasticbeanstalk:command
+        OptionName: DeploymentPolicy
+        Value:
+          Ref: DeploymentPolicy
+      - Namespace: aws:elasticbeanstalk:cloudwatch:logs
+        OptionName: StreamLogs
+        Value:
+          Ref: StreamLogs
+      - Namespace: aws:elasticbeanstalk:cloudwatch:logs
+        OptionName: DeleteOnTerminate
+        Value:
+          Ref: StreamLogsDeleteOnTerminate
+      - Namespace: aws:elasticbeanstalk:cloudwatch:logs
+        OptionName: RetentionInDays
+        Value:
+          Ref: StreamLogsRetentionInDays
+      - Namespace: aws:elasticbeanstalk:hostmanager
+        OptionName: LogPublicationControl
+        Value:
+          Ref: LogPublicationControl
+      - Namespace: aws:elbv2:listener:default
+        OptionName: ListenerEnabled
+        Value: !If [ TlsEnabled, false, true ]
+      - Namespace: !Sub
+        - "aws:elbv2:listener:${ListenPort}"
+        - ListenPort: !If [ TlsEnabled, 443, 80 ]
+        OptionName: Protocol
+        Value: !If [ TlsEnabled, HTTPS, HTTP ]
+      - Namespace: !Sub
+        - "aws:elbv2:listener:${ListenPort}"
+        - ListenPort: !If [ TlsEnabled, 443, 80 ]
+        OptionName: SSLCertificateArns
+        Value:
+          Ref: ACMCertificateArn
+      - Namespace: !Sub
+        - "aws:elbv2:listener:${ListenPort}"
+        - ListenPort: '80'
+        OptionName: Protocol
+        Value: HTTP
+      - Namespace: aws:elbv2:listenerrule:default
+        OptionName: PathPatterns
+        Value: "/*"
+      - Namespace: aws:elbv2:listener:default
+        OptionName: ListenerEnabled
+        Value: true
+      - Namespace: !Sub
+        - "aws:elbv2:listener:${ListenPort}"
+        - ListenPort: '443'
+        OptionName: Protocol
+        Value: HTTPS
+
+
+
+  HbfEnvironment:
+    Type: AWS::ElasticBeanstalk::Environment
+    Properties:
+      ApplicationName: !If [ CreateApplication, !Ref Hbf, !Ref ApplicationName ]
+      CNAMEPrefix:
+        Fn::Join:
+        - "-"
+        - - Ref: ApplicationName
+          - Ref: EnvironmentName
+      EnvironmentName:
+        Ref: EnvironmentName
+      Description: AWS Elastic Beanstalk Environment running Java Hbf Application
+      TemplateName:
+        Ref: HbfConfigTemplate
+      VersionLabel:
+        Ref: HbfVersion
+    DependsOn:
+      - HbfConfigTemplate
+      - HbfVersion
+
+Outputs:
+  URL:
+    Description: The URL of the Elastic Beanstalk environment
+    Value:
+      Fn::Join:
+      - ''
+      - - http://
+        - Fn::GetAtt:
+          - HbfEnvironment
+          - EndpointURL
+

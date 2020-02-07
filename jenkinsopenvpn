@@ -1,0 +1,303 @@
+---
+AWSTemplateFormatVersion: '2010-09-09'
+Description: 'template for jenkins server and ops vpc'
+
+Parameters:
+  cidr:
+    Type: String
+    Default: 10.0.0.0/16
+  subnetcount:
+    Type: String
+    Default: "4" 
+  subnetmask:
+    Type: String
+    Default: "8"  
+  keyName: 
+    Type: AWS::EC2::KeyPair::KeyName
+    Description: select keypair foe ec2 insance
+
+Mappings:
+  RegionMap:
+    us-east-1: #n.verginia
+      amiID: ami-00dc79254d0461090
+    us-west-1: #n.california
+      amiID: ami-024c80694b5b3e51a
+    us-west-2: #oregon
+      amiID: ami-0a85857bfc5345c38
+    us-east-2: #ohio
+      amiID: ami-0dacb0c129b49f529
+
+Resources:
+  jenkinsserver:
+    Type: "AWS::EC2::Instance"
+    Properties:
+      ImageId: !FindInMap [RegionMap, !Ref "AWS::Region", amiID]
+      InstanceType: t2.micro
+      KeyName: !Ref keyName
+      SecurityGroupIds:
+        - !Ref jenkinssecGroup
+      SubnetId: !Ref privsubnet1
+      Tags:
+        - Key: Name
+          Value: jenkins-server
+      UserData: 
+        "Fn::Base64":
+          !Sub |
+          #!/bin/bash
+          sud yum -y update
+          sudo yum remove java-1.7.0-openjdk -y
+          sudo yum install java-1.8.0 -y
+          sudo wget -O /etc/yum.repos.d/jenkins.repo http://pkg.jenkins-ci.org/redhat/jenkins.repo
+          sudo rpm --import http://pkg.jenkins-ci.org/redhat/jenkins-ci.org.key
+          sudo yum clean all 
+          sudo yum update -y
+          sudo yum install jenkins -y
+          sudo systemctl start jenkins 
+          sudo systemctl enable jenkins
+  Bastionserver:
+    Type: "AWS::EC2::Instance"
+    Properties:
+      ImageId: !FindInMap [RegionMap, !Ref "AWS::Region", amiID]
+      InstanceType: t2.micro
+      KeyName: !Ref keyName
+      SecurityGroupIds:
+        - !Ref jenkinssecGroup
+      SubnetId: !Ref pubsubnet1
+      Tags:
+        - Key: Name
+          Value: Bastion-server
+      UserData: 
+        "Fn::Base64":
+          !Sub |
+          #!/bin/bash
+          sud yum -y update
+#open vpn server
+#  OpenVPN:
+#    Type: "AWS::EC2::Instance"
+#    Properties:
+#      ImageId: ami-0ca1c6f31c3fb1708 #n.viginia
+#      InstanceType: t2.micro
+#      KeyName: !Ref keyName
+#      SubnetId: !Ref pubsubnet1
+#      Tags:
+#        - Key: Name
+#          Value: OpenVPN
+          
+#creating security group for Jenkins server 
+  jenkinssecGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupName: jenkins security groups 
+      GroupDescription: security group for jenkins server
+      VpcId: !Ref myVPC
+      SecurityGroupIngress: 
+      - ToPort: '8080'
+        IpProtocol: tcp
+        CidrIp: 0.0.0.0/0
+        FromPort: '8080'
+      - ToPort: '80'
+        IpProtocol: tcp
+        CidrIp: 0.0.0.0/0
+        FromPort: '80'
+      - ToPort: '22'
+        IpProtocol: tcp
+        CidrIp: 0.0.0.0/0
+        FromPort: '22'
+      - ToPort: '443'
+        IpProtocol: tcp
+        CidrIp: 0.0.0.0/0
+        FromPort: '443'      
+      Tags:
+      - Key: Name
+        Value: jenkins-sg
+  bastionsecGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupName: Bastion security groups 
+      GroupDescription: security group for bastion server
+      VpcId: !Ref myVPC
+      SecurityGroupIngress:
+      - ToPort: '80'
+        IpProtocol: tcp
+        CidrIp: 0.0.0.0/0
+        FromPort: '80'
+      - ToPort: '22'
+        IpProtocol: tcp
+        CidrIp: 0.0.0.0/0
+        FromPort: '22'           
+      Tags:
+        - Key: Name
+          Value: Bastion-sg
+#creating a vpc
+  myVPC:
+    Type: AWS::EC2::VPC
+    Properties:
+      CidrBlock: !Ref cidr
+      EnableDnsSupport: true
+      EnableDnsHostnames: true
+      Tags:
+        - Key: Name
+          Value: Ops-Saga-Dev-VPC
+#creating subnets
+  pubsubnet1:
+    Type: AWS::EC2::Subnet
+    Properties:
+      AvailabilityZone: !Select 
+        - 0
+        - !GetAZs ""
+      MapPublicIpOnLaunch: true
+      VpcId: !Ref myVPC
+      CidrBlock: !Select [0, !Cidr [!Ref cidr, !Ref subnetcount, !Ref subnetmask]]
+      Tags:
+        - Key: Name
+          Value: Ops-Dev-PubSub1
+  pubsubnet2:
+    Type: AWS::EC2::Subnet
+    Properties:
+      AvailabilityZone: !Select 
+        - 1
+        - !GetAZs ""
+      MapPublicIpOnLaunch: true  
+      VpcId: !Ref myVPC
+      CidrBlock: !Select [1, !Cidr [!Ref cidr, !Ref subnetcount, !Ref subnetmask]]
+      Tags:
+        - Key: Name
+          Value: Ops-Dev-PubSub2
+  privsubnet1:
+    Type: AWS::EC2::Subnet
+    Properties:
+      AvailabilityZone: !Select 
+        - 0
+        - !GetAZs ""
+      MapPublicIpOnLaunch: true
+      VpcId: !Ref myVPC
+      CidrBlock: !Select [2, !Cidr [!Ref cidr, !Ref subnetcount, !Ref subnetmask]]
+      Tags:
+        - Key: Name
+          Value: Ops-Dev-PrivSub1
+  privsubnet2:
+    Type: AWS::EC2::Subnet
+    Properties:
+      AvailabilityZone: !Select 
+        - 1
+        - !GetAZs ""
+      MapPublicIpOnLaunch: true
+      VpcId: !Ref myVPC
+      CidrBlock: !Select [3, !Cidr [!Ref cidr, !Ref subnetcount, !Ref subnetmask]]
+      Tags:
+        - Key: Name
+          Value: Ops-Dev-PrivSub
+
+
+
+
+#creating route tables
+
+  publicrouteTable:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId: !Ref myVPC
+      Tags:
+        - Key: Name
+          Value: Ops-PublicrouteTable
+  privaterouteTable:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId: !Ref myVPC
+      Tags:
+        - Key: Name
+          Value: Ops-PrivaterouteTable
+#creating route table association
+  pubrouteTableAssoc1:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      SubnetId: !Ref pubsubnet1
+      RouteTableId: !Ref publicrouteTable
+  pubrouteTableAssoc2:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      SubnetId: !Ref pubsubnet2
+      RouteTableId: !Ref publicrouteTable
+  privrouteTableAssoc1:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      SubnetId: !Ref privsubnet1
+      RouteTableId: !Ref privaterouteTable
+  privrouteTableAssoc2:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      SubnetId: !Ref privsubnet2
+      RouteTableId: !Ref privaterouteTable
+#creating an internet gateway
+  igwName:
+    Type: AWS::EC2::InternetGateway
+    Properties:
+      Tags:
+        - Key: Name
+          Value: saga-IGW
+  AttachGateway:
+    Type: AWS::EC2::VPCGatewayAttachment
+    Properties:
+      VpcId: !Ref myVPC
+      InternetGatewayId: !Ref igwName 
+#attaching igw
+  igwroute:
+    Type: AWS::EC2::Route
+    Properties:
+      RouteTableId: !Ref publicrouteTable
+      DestinationCidrBlock: 0.0.0.0/0
+      GatewayId: !Ref igwName
+#creating Eip gateway
+  eip:
+    Type: AWS::EC2::EIP
+    Properties:
+     Domain: !Ref myVPC
+#creating nat gateway
+  natID:
+    Type: "AWS::EC2::NatGateway"
+    Properties:
+      AllocationId: !GetAtt 'eip.AllocationId' #required
+      SubnetId: !Ref pubsubnet1 #required
+#attacing nat gateway
+  natroute:
+    Type: AWS::EC2::Route
+    Properties:
+      RouteTableId: !Ref privaterouteTable
+      DestinationCidrBlock: 0.0.0.0/0
+      NatGatewayId: !Ref natID                    
+#creatin load balncer for jenkins server
+#  elasticlaodbalncer:
+#    Type: "AWS::ElasticLoadBalancingV2::LoadBalancer"
+#    Properties:
+#      IpAddressType: ipv4
+#      Scheme: internet-facing
+#      Subnets:
+#        - !Ref pubsubnet1
+#        - !Ref pubsubnet2 
+#      Type: application
+#creating target group for Load Blancer
+#  targetgroup:
+#    Type: "AWS::ElasticLoadBalancingV2::TargetGroup"
+#    Properties:
+#      HealthCheckEnabled: true
+#      HealthCheckIntervalSeconds: '60'
+#      HealthCheckPath: /
+#      HealthCheckPort: '80'
+#      HealthCheckProtocol: HTTP
+#      Name: apacheloadbalancer
+#      Port: '80'
+#      Protocol: HTTP
+#      TargetType: instance
+#      Targets:
+#        - Id: !Ref jenkinsserver
+#      VpcId: !Ref myVPC
+#creatting listners 
+#  listner:
+#    Type: "AWS::ElasticLoadBalancingV2::Listener"
+#    Properties:
+#      DefaultActions: #required
+#         - Type: forward
+#           TargetGroupArn: !Ref targetgroup
+#      LoadBalancerArn: !Ref elasticlaodbalncer #required
+#      Port: 80 #required
+#      Protocol: HTTP #required
