@@ -1,0 +1,554 @@
+---
+AWSTemplateFormatVersion: '2010-09-09'
+Description: 'AWS CloudFormation Template ElasticBeanstalk running wordpress'
+Parameters:
+  ApplicationName:
+    Description: Application name
+    Type: String
+    MinLength: '3'
+    MaxLength: '100'
+    Default: php
+    AllowedPattern: "^[\\w-]*$"
+    ConstraintDescription: must be a valid string Alphanumeric + _ and -
+  AppSubnet1:
+    Type: 'AWS::EC2::Subnet::Id'
+    Default: subnet-8b9463f2
+    Description: The list of SubnetIds in your Virtual Private Cloud (VPC)
+    ConstraintDescription: >-
+      must be a list of at least two existing subnets associated with at least
+      two different availability zones. They should be residing in the selected
+      Virtual Private Cloud.
+  AppSubnet2:
+    Type: 'AWS::EC2::Subnet::Id'
+    Default: subnet-3f120477
+    Description: The list of SubnetIds in your Virtual Private Cloud (VPC)
+    ConstraintDescription: >-
+      must be a list of at least two existing subnets associated with at least
+      two different availability zones. They should be residing in the selected
+      Virtual Private Cloud.                  
+  AppSubnet3:
+    Type: 'AWS::EC2::Subnet::Id'
+    Default: subnet-3f120477
+    Description: The list of SubnetIds in your Virtual Private Cloud (VPC)
+    ConstraintDescription: >-
+       must be a list of at least two existing subnets associated with at least
+       two different availability zones. They should be residing in the selected
+       Virtual Private Cloud.    
+  ElbSubnet1: 
+    Type: 'AWS::EC2::Subnet::Id'
+    Default: subnet-2c936455
+    Description: The list of SubnetIds in your Virtual Public Cloud (VPC)
+    ConstraintDescription: >-
+      must be a list of at least two existing subnets associated with at least
+      two different availability zones. They should be residing in the selected
+      Virtual Private Cloud. 
+  ElbSubnet2: 
+    Type: 'AWS::EC2::Subnet::Id'
+    Default: subnet-5b120413
+    Description: The list of SubnetIds in your Virtual Public Cloud (VPC)
+    ConstraintDescription: >-
+      must be a list of at least two existing subnets associated with at least
+      two different availability zones. They should be residing in the selected
+      Virtual Private Cloud.
+  ElbSubnet3:
+    Type: 'AWS::EC2::Subnet::Id'
+    Default: subnet-5b120413
+    Description: The list of SubnetIds in your Virtual Public Cloud (VPC)
+    ConstraintDescription: >-
+      must be a list of at least two existing subnets associated with at least
+      two different availability zones. They should be residing in the selected
+      Virtual Private Cloud.    
+  EnvironmentName:
+    Description: Environment Name
+    Type: String
+    MinLength: '3'
+    MaxLength: '20'
+    Default: development
+    ConstraintDescription: must be a valid string Alphanumeric
+  RdsInstanceEndpoint:
+    Description: Rds Endpoint
+    Type: String
+    Default: "test"
+  KeyName:
+    Description: Name of an existing EC2 KeyPair to enable SSH access to the Elastic
+      Beanstalk hosts
+    Type: AWS::EC2::KeyPair::KeyName
+    Default: hba-development
+    ConstraintDescription: must be the name of an existing EC2 KeyPair.
+  EC2InstanceType:
+    Description: EC2 instance type
+    Type: String
+    Default: t3.small
+    AllowedValues:
+      - t3.small
+      - t3.medium
+      - t3.large
+      - c5.large
+      - c5.xlarge
+      - c5.2xlarge
+      - c5.4xlarge
+      - c5.9xlarge
+      - c5.18xlarge
+      - m5.large
+      - m5.xlarge
+      - m5.2xlarge
+      - m5.4xlarge
+      - m5.12xlarge
+      - m5.24xlarge
+      - r5.large
+      - r5.xlarge
+      - r5.2xlarge
+      - r5.4xlarge	
+    ConstraintDescription: must be a valid EC2 instance type.
+  SSHLocation:
+    Description: Lockdown SSH access to the Beasntalk EC2 instances (default can be
+      accessed from anywhere)
+    Type: String
+    MinLength: '9'
+    MaxLength: '18'
+    Default: 10.0.0.0/16
+    ConstraintDescription: must be a valid CIDR range of the form x.x.x.x/x.
+  AutoScalingGroupMinSize:
+    Description: Minimum number of instances you want in your Auto Scaling group.
+    Type: Number
+    Default: '1'
+    ConstraintDescription: must be a valid integer value.
+  AutoScalingGroupMaxSize:
+    Description: Maximum number of instances you want in your Auto Scaling group.
+    Type: Number
+    Default: '6'
+    ConstraintDescription: must be a valid integer value.
+  StreamLogsRetentionInDays:
+    Description: The number of days to keep log events before they expire.
+    Type: Number
+    Default: '7'
+    AllowedValues:
+    - '1'
+    - '3'
+    - '5'
+    - '7'
+    - '14'
+    - '30'
+    - '60'
+    - '90'
+    - '120'
+    - '150'
+    - '180'
+    - '365'
+    - '400'
+    - '545'
+    - '731'
+    - '1827'
+    - '3653'
+  FILESYSTEMID:
+    Description: Elastic FileSystem ID.
+    Type: String    
+  EnvironmentType:
+    Type: String
+    Description: Set to SingleInstance to launch one EC2 instance with no load balancer.
+    AllowedValues:
+    - SingleInstance
+    - LoadBalanced
+    Default: LoadBalanced
+  OperatorEmail:
+    Description: Email address to notify if there are any operational issues
+    Type: String
+    Default: test@test.com
+    AllowedPattern: "([a-zA-Z0-9_\\-\\.]+)@((\\[[0-9]{1,3}\\.[0-9]{1,3}\\.[0-9]{1,3}\\.)|(([a-zA-Z0-9\\-]+\\.)+))([a-zA-Z]{2,4}|[0-9]{1,3})(\\]?)"
+    ConstraintDescription: must be a valid email address.
+  ApplicationS3Bucket:
+    Description: Application path in s3
+    Type: String
+    Default: gohbf-nested-cft
+  ApplicationS3Artifact:
+    Description: Application artifact file
+    Type: String
+    Default: wordpress-5.2.3.zip
+  VPC: 
+    Type: "AWS::EC2::VPC::Id" 
+    Description: Enter a valid vpc
+    Default: vpc-81cc7ef8
+  LaunchRDS: 
+    Description: Specify true or false.
+    Default: true
+    Type: String
+    AllowedValues: 
+      - true
+      - false
+    ConstraintDescription: must specify true or false.
+  LBSSLCertificateArn:
+    Description: The SSL/TLS certificate ARN for loadbalancer
+    Type: String
+    MinLength: 0
+    MaxLength: 2048
+    Default: 'arn:aws:acm:us-west-2:718273194062:certificate/0bbb2066-5c66-4477-ba13-da69697afcfb'
+  DatabaseUser:
+    Default: dbwordpress
+    Type: String
+    Description: Database admin account name
+    MinLength: 5
+    MaxLength: 16
+    ConstraintDescription: Name must begin with a letter and contain only alphanumeric characters
+  DatabasePassword:
+    NoEcho: true
+    Default: wordpress1234
+    Type: String
+    Description: Database admin account password(default to pass1234).
+    MinLength: 5
+    MaxLength: 41
+    ConstraintDescription: Password must contain only alphanumeric characters
+  DatabaseName:
+    Default: dbwordpress
+    Type: String
+    Description: Database name
+    MinLength: 1
+    MaxLength: 30
+    ConstraintDescription: Name must begin with a letter and contain only alphanumeric characters
+
+Conditions: 
+  TlsEnabled: !Not [ !Equals [ !Ref LBSSLCertificateArn, "" ] ]
+  CreateRDS: !Equals [ !Ref LaunchRDS, true ]
+
+Mappings:
+  Region2Principal:
+    us-east-1:
+      EC2Principal: ec2.amazonaws.com
+    us-west-2:
+      EC2Principal: ec2.amazonaws.com
+    us-west-1:
+      EC2Principal: ec2.amazonaws.com
+    eu-west-1:
+      EC2Principal: ec2.amazonaws.com
+    eu-west-2:
+      EC2Principal: ec2.amazonaws.com
+    ap-southeast-1:
+      EC2Principal: ec2.amazonaws.com
+    ap-northeast-1:
+      EC2Principal: ec2.amazonaws.com
+    ap-northeast-2:
+      EC2Principal: ec2.amazonaws.com
+    ap-southeast-2:
+      EC2Principal: ec2.amazonaws.com
+    ap-south-1:
+      EC2Principal: ec2.amazonaws.com
+    us-east-2:
+      EC2Principal: ec2.amazonaws.com
+    ca-central-1:
+      EC2Principal: ec2.amazonaws.com
+    sa-east-1:
+      EC2Principal: ec2.amazonaws.com
+    cn-north-1:
+      EC2Principal: ec2.amazonaws.com.cn
+    eu-central-1:
+      EC2Principal: ec2.amazonaws.com
+
+Resources:
+  NotificationTopic:
+    Type: AWS::SNS::Topic
+    Properties:
+      Subscription:
+      - Endpoint:
+          Ref: OperatorEmail
+        Protocol: email
+  ServiceRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+        - Effect: Allow
+          Principal:
+            Service: elasticbeanstalk.amazonaws.com
+          Condition:
+            StringEquals:
+              sts:ExternalId: elasticbeanstalk
+          Action:
+          - sts:AssumeRole
+      ManagedPolicyArns:
+      - arn:aws:iam::aws:policy/service-role/AWSElasticBeanstalkEnhancedHealth
+      - arn:aws:iam::aws:policy/service-role/AWSElasticBeanstalkService
+  BalancerSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: SecurityGroup for ElasticBeanstalk Balancer
+      SecurityGroupIngress:
+      - IpProtocol: tcp
+        FromPort: '80'
+        ToPort: '80'
+        CidrIp: 0.0.0.0/0
+      - IpProtocol: tcp
+        FromPort: '443'
+        ToPort: '443'
+        CidrIp: 0.0.0.0/0
+      VpcId:
+         Ref: VPC
+  InstanceSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: SecurityGroup for ElasticBeanstalk EC2 Instances
+      VpcId:
+        Ref: VPC
+      SecurityGroupIngress:
+      - IpProtocol: tcp
+        FromPort: '80'
+        ToPort: '80'
+        SourceSecurityGroupId: !Ref BalancerSecurityGroup
+      - IpProtocol: tcp
+        FromPort: '443'
+        ToPort: '443'
+        SourceSecurityGroupId: !Ref BalancerSecurityGroup
+      - IpProtocol: tcp
+        FromPort: '22'
+        ToPort: '22'
+        CidrIp:
+          Ref: SSHLocation
+      Tags:
+        - 
+          Key: Name
+          Value:
+            Fn::Join:
+            - "-"
+            - - Ref: EnvironmentName
+              - sg
+  Wordpress:
+    Type: AWS::ElasticBeanstalk::Application
+    Properties:
+      ApplicationName:
+        Ref: ApplicationName
+      Description: AWS Elastic Beanstalk Wordpress Application
+  WordpressVersion:
+    Type: AWS::ElasticBeanstalk::ApplicationVersion
+    Properties:
+      Description: 1.0.0
+      ApplicationName:
+        Ref: Wordpress
+      SourceBundle:
+        S3Bucket:
+          Ref: ApplicationS3Bucket
+        S3Key:
+          Ref: ApplicationS3Artifact
+  WordpressConfigTemplate:
+    Type: AWS::ElasticBeanstalk::ConfigurationTemplate
+    Properties:
+      ApplicationName:
+        Ref: Wordpress
+      Description: AWS Elastic Beanstalk Environment running Wordpress Application
+      EnvironmentId: ''
+      SolutionStackName: 64bit Amazon Linux 2018.03 v2.8.15 running PHP 7.2
+      OptionSettings: 
+      - Namespace: aws:elasticbeanstalk:application:environment
+        OptionName: JDBC_CONNECTION_STRING
+        Value:
+         Fn::If:
+         - CreateRDS
+         - Fn::Join:
+            - ''
+            - - jdbc:mysql://
+              - Ref: RdsInstanceEndpoint
+              - ":"
+              - 3306
+              - "/"
+              - Ref: DatabaseName
+         - Ref: AWS::NoValue
+      - Namespace: aws:elasticbeanstalk:application:environment
+        OptionName: RDS_USERNAME
+        Value:
+          Ref: DatabaseUser
+      - Namespace: aws:elasticbeanstalk:application:environment
+        OptionName: RDS_PASSWORD
+        Value:
+          Ref: DatabasePassword
+      - Namespace: aws:elasticbeanstalk:application:environment
+        OptionName: RDS_DB_NAME
+        Value:
+          Ref: DatabaseName
+      - Namespace: aws:elasticbeanstalk:application:environment
+        OptionName: RDS_PORT
+        Value: 3306
+      - Namespace: aws:elasticbeanstalk:application:environment
+        OptionName: RDS_HOSTNAME 
+        Value: !Ref RdsInstanceEndpoint
+      - Namespace: aws:elb:loadbalancer
+        OptionName: CrossZone
+        Value: true
+      - Namespace: aws:elasticbeanstalk:environment
+        OptionName: LoadBalancerType
+        Value: application
+      - Namespace: aws:elb:loadbalancer
+        OptionName: SecurityGroups
+        Value:
+          Fn::GetAtt:
+          - BalancerSecurityGroup
+          - GroupId
+      - Namespace: aws:ec2:vpc
+        OptionName: VPCId
+        Value: !Ref VPC 
+      - Namespace: aws:ec2:vpc
+        OptionName: Subnets
+        Value: !Join [ ",", [ !Ref AppSubnet1, !Ref AppSubnet2, !Ref AppSubnet3 ] ]
+
+      - Namespace: aws:ec2:vpc
+        OptionName: ELBSubnets
+        Value: !Join [",", [ !Ref ElbSubnet1, !Ref ElbSubnet2, !Ref ElbSubnet3 ] ]
+      - Namespace: aws:elasticbeanstalk:environment
+        OptionName: EnvironmentType
+        Value:
+          Ref: EnvironmentType
+      - Namespace: aws:elasticbeanstalk:environment
+        OptionName: ServiceRole
+        Value:
+          Ref: ServiceRole
+      - Namespace: aws:elasticbeanstalk:sns:topics
+        OptionName: Notification Protocol
+        Value: email
+      - Namespace: aws:elasticbeanstalk:sns:topics
+        OptionName: Notification Endpoint
+        Value:
+          Ref: OperatorEmail
+      - Namespace: aws:elasticbeanstalk:sns:topics
+        OptionName: Notification Topic ARN
+        Value:
+          Ref: NotificationTopic
+      - Namespace: aws:autoscaling:launchconfiguration
+        OptionName: EC2KeyName
+        Value:
+          Ref: KeyName
+      - Namespace: aws:autoscaling:launchconfiguration
+        OptionName: InstanceType
+        Value: !Ref EC2InstanceType 
+      - Namespace: aws:autoscaling:launchconfiguration
+        OptionName: IamInstanceProfile
+        Value: aws-elasticbeanstalk-ec2-role
+      - Namespace: aws:autoscaling:launchconfiguration
+        OptionName: SecurityGroups
+        Value:
+          Ref: InstanceSecurityGroup
+      - Namespace: aws:elasticbeanstalk:healthreporting:system
+        OptionName: SystemType
+        Value: enhanced
+      - Namespace: aws:elasticbeanstalk:environment:process:default
+        OptionName: MatcherHTTPCode
+        Value: 200,302
+      - Namespace: aws:elasticbeanstalk:environment:process:default
+        OptionName: Port
+        Value: 80
+      - Namespace: aws:elasticbeanstalk:environment:process:default
+        OptionName: Protocol
+        Value: HTTP
+      - Namespace: aws:elasticbeanstalk:environment:process:default2
+        OptionName: MatcherHTTPCode
+        Value: 200,302
+      - Namespace: aws:elasticbeanstalk:environment:process:default2
+        OptionName: Port
+        Value: 443
+      - Namespace: aws:elasticbeanstalk:environment:process:default2
+        OptionName: Protocol
+        Value: HTTPS
+      - Namespace: aws:autoscaling:asg
+        OptionName: MinSize
+        Value:
+          Ref: AutoScalingGroupMinSize
+      - Namespace: aws:autoscaling:asg
+        OptionName: MaxSize
+        Value:
+          Ref: AutoScalingGroupMaxSize
+      - Namespace: aws:elasticbeanstalk:command
+        OptionName: DeploymentPolicy
+        Value: Rolling
+      - Namespace: aws:elasticbeanstalk:cloudwatch:logs
+        OptionName: StreamLogs
+        Value: true
+      - Namespace: aws:elasticbeanstalk:cloudwatch:logs
+        OptionName: DeleteOnTerminate
+        Value: true
+      - Namespace: aws:elasticbeanstalk:cloudwatch:logs
+        OptionName: RetentionInDays
+        Value:
+          Ref: StreamLogsRetentionInDays
+      - Namespace: aws:elbv2:listener:default
+        OptionName: ListenerEnabled
+        Value: !If [ TlsEnabled, false, true ]
+      - Namespace: !Sub
+        - "aws:elbv2:listener:${ListenPort}"
+        - ListenPort: !If [ TlsEnabled, 443, 80 ]
+        OptionName: Protocol
+        Value: !If [ TlsEnabled, HTTPS, HTTP ]
+      - Namespace: !Sub
+        - "aws:elbv2:listener:${ListenPort}"
+        - ListenPort: !If [ TlsEnabled, 443, 80 ]
+        OptionName: SSLCertificateArns
+        Value:
+          Ref: LBSSLCertificateArn
+      - Namespace: !Sub
+        - "aws:elbv2:listener:${ListenPort}"
+        - ListenPort: '80'
+        OptionName: Protocol
+        Value: HTTP
+      - Namespace: aws:elbv2:listenerrule:default
+        OptionName: PathPatterns
+        Value: "/*"
+      - Namespace: aws:elbv2:listenerrule:default2
+        OptionName: PathPatterns
+        Value: "/*"
+      - Namespace: aws:elbv2:listener:443
+        OptionName: DefaultProcess
+        Value: default2
+      - Namespace: aws:elbv2:listenerrule:default
+        OptionName: Priority
+        Value: 1
+      - Namespace: aws:elbv2:listenerrule:default2
+        OptionName: Priority
+        Value: 2
+      - Namespace: aws:elbv2:listener:default
+        OptionName: ListenerEnabled
+        Value: true
+      - Namespace: aws:elasticbeanstalk:application:environment
+        OptionName: FILE_SYSTEM_ID
+        Value: !Ref FILESYSTEMID
+      - Namespace: aws:elasticbeanstalk:environment:process:default2
+        OptionName: StickinessEnabled
+        Value: true
+      - Namespace: aws:elasticbeanstalk:environment:process:default2
+        OptionName: StickinessLBCookieDuration
+        Value: 86400
+      - Namespace: aws:elasticbeanstalk:environment:process:default
+        OptionName: StickinessEnabled
+        Value: true
+      - Namespace: aws:elasticbeanstalk:environment:process:default
+        OptionName: StickinessLBCookieDuration
+        Value: 86400
+
+
+  WordpressEnvironment:
+    Type: AWS::ElasticBeanstalk::Environment
+    Properties:
+      ApplicationName:
+        Ref: Wordpress
+      CNAMEPrefix:
+        Fn::Join:
+        - "-"
+        - - Ref: ApplicationName
+          - Ref: EnvironmentName
+      EnvironmentName:
+        Ref: EnvironmentName
+      Description: AWS Elastic Beanstalk Environment running Wordpress Application.
+      TemplateName:
+        Ref: WordpressConfigTemplate
+      VersionLabel:
+        Ref: WordpressVersion
+    DependsOn:
+      - WordpressConfigTemplate
+      - WordpressVersion
+Outputs:
+  URL:
+    Description: The URL of the Elastic Beanstalk environment
+    Value:
+      Fn::Join:
+      - ''
+      - - http://
+        - Fn::GetAtt:
+          - WordpressEnvironment
+          - EndpointURL
+  Ec2SecurityGroup:
+    Value: !Ref InstanceSecurityGroup          
+

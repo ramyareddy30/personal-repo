@@ -1,0 +1,362 @@
+---
+AWSTemplateFormatVersion: '2010-09-09'
+Description: 'AWS CloudFormation Template ElasticBeanstalk running wordpress'
+Metadata:
+  'AWS::CloudFormation::Interface':
+    ParameterGroups:
+    - Label:
+        default: 'Templates S3 Bucket'
+      Parameters:
+      - TemplateS3Bucket    
+    - Label:
+        default: 'wordpress beanstalk application'
+      Parameters:
+      - ApplicationName
+      - EnvironmentName
+      - AppSubnet1
+      - AppSubnet2
+      - AppSubnet3
+      - ElbSubnet1
+      - ElbSubnet2
+      - ElbSubnet3
+      - KeyName
+      - EC2InstanceType
+      - SSHLocation
+      - AutoScalingGroupMinSize
+      - AutoScalingGroupMaxSize
+      - StreamLogsRetentionInDays
+      - EnvironmentType
+      - ApplicationS3Bucket
+      - ApplicationS3Artifact
+    - Label:
+        default: 'RDS parameters'
+      Parameters:
+      - LaunchRDS
+      - DatabaseUser
+      - DatabasePassword
+      - DatabaseName
+      - DatabaseSize
+      - DatabaseInstanceClass
+      - MultiAZ
+      - DatabaseSubnet1
+      - DatabaseSubnet2
+    - Label:
+        default: 'Other parameters'
+      Parameters:
+      - VPC
+      - OperatorEmail
+      - KMSKey
+
+Parameters:
+  TemplateS3Bucket:
+    Description: Netsted Templates S3 Bucket Name
+    Default: "ramya421"
+    Type: String    
+  ApplicationName:
+    Description: Application name
+    Type: String
+    MinLength: '3'
+    MaxLength: '100'
+    Default: php
+    AllowedPattern: "^[\\w-]*$"
+    ConstraintDescription: must be a valid string Alphanumeric + _ and -
+  AppSubnet1:
+    Type: 'AWS::EC2::Subnet::Id'
+    Description: The list of SubnetIds in your Virtual Private Cloud (VPC)
+    Default: "subnet-7a1e0832"
+    ConstraintDescription: >-
+      must be a list of at least two existing subnets associated with at least
+      two different availability zones. They should be residing in the selected
+      Virtual Private Cloud.
+  AppSubnet2:
+    Type: 'AWS::EC2::Subnet::Id'
+    Default: "subnet-39548f63"
+    Description: The list of SubnetIds in your Virtual Private Cloud (VPC)
+    ConstraintDescription: >-
+      must be a list of at least two existing subnets associated with at least
+      two different availability zones. They should be residing in the selected
+      Virtual Private Cloud.  
+  AppSubnet3:
+    Type: 'AWS::EC2::Subnet::Id'
+    Default: "subnet-90a85fe9"
+    Description: The list of SubnetIds in your Virtual Private Cloud (VPC)
+    ConstraintDescription: >-
+      must be a list of at least two existing subnets associated with at least
+      two different availability zones. They should be residing in the selected
+      Virtual Private Cloud.                
+  ElbSubnet1: 
+    Type: 'AWS::EC2::Subnet::Id'
+    Default: subnet-2c936455
+    Description: The list of SubnetIds in your Virtual Public Cloud (VPC)
+    ConstraintDescription: >-
+      must be a list of at least two existing subnets associated with at least
+      two different availability zones. They should be residing in the selected
+      Virtual Private Cloud. 
+  ElbSubnet2: 
+    Type: 'AWS::EC2::Subnet::Id'
+    Default: subnet-5b120413
+    Description: The list of SubnetIds in your Virtual Public Cloud (VPC)
+    ConstraintDescription: >-
+      must be a list of at least two existing subnets associated with at least
+      two different availability zones. They should be residing in the selected
+      Virtual Private Cloud.
+  ElbSubnet3:
+    Type: 'AWS::EC2::Subnet::Id'
+    Default: subnet-5b120413
+    Description: The list of SubnetIds in your Virtual Public Cloud (VPC)
+    ConstraintDescription: >-
+      must be a list of at least two existing subnets associated with at least
+      two different availability zones. They should be residing in the selected
+      Virtual Private Cloud. 
+  EnvironmentName:
+    Description: Beanstalk Environment Name.
+    Type: String
+    MinLength: '3'
+    MaxLength: '20'
+    Default: development
+    ConstraintDescription: must be a valid string Alphanumeric
+  KMSKey:
+    Description: KMS Key Id to encrypt the data at rest.
+    Type: String
+    Default: 50fa8cf1-4f6d-4afc-bcbb-9e339b0bfd49
+  KeyName:
+    Description: Name of an existing EC2 KeyPair to enable SSH access to the Elastic
+      Beanstalk hosts
+    Type: AWS::EC2::KeyPair::KeyName
+    Default: oregon
+    ConstraintDescription: must be the name of an existing EC2 KeyPair.
+  EC2InstanceType:
+    Description: EC2 instance type
+    Type: String
+    Default: t3.small
+    AllowedValues:
+      - t3.small
+      - t3.medium
+      - t3.large
+      - c5.large
+      - c5.xlarge
+      - c5.2xlarge
+      - c5.4xlarge
+      - c5.9xlarge
+      - c5.18xlarge
+      - m5.large
+      - m5.xlarge
+      - m5.2xlarge
+      - m5.4xlarge
+      - m5.12xlarge
+      - m5.24xlarge
+      - r5.large
+      - r5.xlarge
+      - r5.2xlarge
+      - r5.4xlarge	
+    ConstraintDescription: must be a valid EC2 instance type.
+  SSHLocation:
+    Description: Lockdown SSH access to the Beasntalk EC2 instances (default can be
+      accessed from anywhere)
+    Type: String
+    MinLength: '9'
+    MaxLength: '18'
+    Default: 10.0.0.0/16
+    ConstraintDescription: must be a valid CIDR range of the form x.x.x.x/x.
+  AutoScalingGroupMinSize:
+    Description: Minimum number of instances you want in your Auto Scaling group.
+    Type: Number
+    Default: '1'
+    ConstraintDescription: must be a valid integer value.
+  AutoScalingGroupMaxSize:
+    Description: Maximum number of instances you want in your Auto Scaling group.
+    Type: Number
+    Default: '6'
+    ConstraintDescription: must be a valid integer value.
+  StreamLogsRetentionInDays:
+    Description: The number of days to keep log events before they expire.
+    Type: Number
+    Default: '7'
+    AllowedValues:
+    - '1'
+    - '3'
+    - '5'
+    - '7'
+    - '14'
+    - '30'
+    - '60'
+    - '90'
+    - '120'
+    - '150'
+    - '180'
+    - '365'
+    - '400'
+    - '545'
+    - '731'
+    - '1827'
+    - '3653'
+  EnvironmentType:
+    Type: String
+    Description: Set to SingleInstance to launch one EC2 instance with no load balancer.
+    AllowedValues:
+    - SingleInstance
+    - LoadBalanced
+    Default: LoadBalanced
+  OperatorEmail:
+    Description: Email address to notify if there are any operational issues
+    Type: String
+    Default: test@test.com
+    AllowedPattern: "([a-zA-Z0-9_\\-\\.]+)@((\\[[0-9]{1,3}\\.[0-9]{1,3}\\.[0-9]{1,3}\\.)|(([a-zA-Z0-9\\-]+\\.)+))([a-zA-Z]{2,4}|[0-9]{1,3})(\\]?)"
+    ConstraintDescription: must be a valid email address.
+  ApplicationS3Bucket:
+    Description: Application path in s3
+    Type: String
+    Default: ramya421
+  ApplicationS3Artifact:
+    Description: Application artifact file
+    Type: String
+    Default: wordpress-5.2.4.zip
+  VPC: 
+    Type: "AWS::EC2::VPC::Id" 
+    Description: Enter a valid vpc
+    Default: vpc-6269d21a
+  DatabaseUser:
+    Default: dbwordpress
+    Type: String
+    Description: Database admin account name
+    MinLength: 5
+    MaxLength: 16
+    ConstraintDescription: Name must begin with a letter and contain only alphanumeric characters
+  DatabasePassword:
+    NoEcho: true
+    Default: wordpress1234
+    Type: String
+    Description: Database admin account password(default to pass1234).
+    MinLength: 5
+    MaxLength: 41
+    ConstraintDescription: Password must contain only alphanumeric characters
+  DatabaseName:
+    Default: dbwordpress
+    Type: String
+    Description: Database name
+    MinLength: 1
+    MaxLength: 30
+    ConstraintDescription: Name must begin with a letter and contain only alphanumeric characters
+  DatabaseSize:
+    Default: 10
+    Type: String
+    Description: Database storage size in gigabytes (GB) - Not applicable for Aurora
+    MinLength: 1
+    ConstraintDescription: Enter a size of at least 5 GB
+  DatabaseInstanceClass:
+    Default: db.t2.small
+    Type: String
+    Description: "Database instance class, e.g. db.t2.micro (free tier) - Engine support: https://docs.aws.amazon.com/AmazonRDS/latest/UserGuide/Concepts.DBInstanceClass.html"
+    ConstraintDescription: DB instance class.
+    AllowedValues:
+      - db.t2.micro
+      - db.t2.small
+      - db.t2.medium
+      - db.t2.large
+      - db.t2.xlarge
+      - db.t2.2xlarge
+      - db.m4.large
+      - db.m4.xlarge
+      - db.m4.2xlarge
+      - db.m4.4xlarge
+      - db.m4.10xlarge
+      - db.m4.16xlarge
+      - db.r4.large
+      - db.r4.xlarge
+      - db.r4.2xlarge
+      - db.r4.4xlarge
+      - db.r4.8xlarge
+      - db.r4.16xlarge
+  MultiAZ:
+    Description: Multi-AZ master database
+    Type: String
+    Default: 'false'
+    AllowedValues: ['true', 'false']
+  DatabaseSubnet1:
+    Type: 'AWS::EC2::Subnet::Id'
+    Default: subnet-8b9463f2
+    Description: The list of SubnetIds in your Virtual Private Cloud (VPC)
+    ConstraintDescription: >-
+      must be a list of at least two existing subnets associated with at least
+      two different availability zones. They should be residing in the selected
+      Virtual Private Cloud.
+  DatabaseSubnet2:
+    Type: 'AWS::EC2::Subnet::Id'
+    Default: subnet-3f120477
+    Description: The list of SubnetIds in your Virtual Private Cloud (VPC)
+    ConstraintDescription: >-
+      must be a list of at least two existing subnets associated with at least
+      two different availability zones. They should be residing in the selected
+      Virtual Private Cloud.
+  LaunchRDS: 
+    Description: Specify true or false.
+    Default: true
+    Type: String
+    AllowedValues: 
+      - true
+      - false
+    ConstraintDescription: must specify true or false.
+Conditions:
+  CreateRDS: !Equals [ !Ref LaunchRDS, true ]
+
+Resources:
+  WordpressBeanstalk:
+    Type: AWS::CloudFormation::Stack
+    Properties:
+      TemplateURL: !Sub https://s3.amazonaws.com/${TemplateS3Bucket}/cft-wordpress.yaml
+      Parameters:
+        VPC: !Ref VPC
+        EnvironmentName: !Ref EnvironmentName
+        ApplicationName: !Ref ApplicationName
+        AppSubnet1: !Ref AppSubnet1
+        AppSubnet2: !Ref AppSubnet2
+        AppSubnet3: !Ref AppSubnet3
+        ElbSubnet1: !Ref ElbSubnet1
+        ElbSubnet2: !Ref ElbSubnet2
+        ElbSubnet3: !Ref ElbSubnet3
+        KeyName: !Ref KeyName
+        EC2InstanceType: !Ref EC2InstanceType
+        SSHLocation: !Ref SSHLocation
+        AutoScalingGroupMinSize: !Ref AutoScalingGroupMinSize
+        AutoScalingGroupMaxSize: !Ref AutoScalingGroupMaxSize
+        StreamLogsRetentionInDays: !Ref StreamLogsRetentionInDays
+        EnvironmentType: !Ref EnvironmentType
+        LaunchRDS: !Ref LaunchRDS
+        ApplicationS3Bucket: !Ref ApplicationS3Bucket
+        ApplicationS3Artifact: !Ref ApplicationS3Artifact
+        RdsInstanceEndpoint: !GetAtt RDS.Outputs.RdsInstanceEndpoint
+        DatabaseName: !GetAtt RDS.Outputs.DatabaseName
+        DatabasePassword: !GetAtt RDS.Outputs.DatabasePassword
+        DatabaseUser: !GetAtt RDS.Outputs.DatabaseUser
+        FILESYSTEMID: !GetAtt EFS.Outputs.FILESYSTEMID
+
+  RDS:
+    Type: AWS::CloudFormation::Stack
+    Condition: CreateRDS
+    Properties:
+      TemplateURL: !Sub https://s3.amazonaws.com/${TemplateS3Bucket}/cft-wordpress-rds.yaml
+      Parameters:
+        EnvironmentName: !Ref EnvironmentName
+        VPC: !Ref VPC
+        DatabaseUser: !Ref DatabaseUser
+        DatabasePassword: !Ref DatabasePassword
+        DatabaseName: !Ref DatabaseName
+        DatabaseSize: !Ref DatabaseSize
+        DatabaseInstanceClass: !Ref DatabaseInstanceClass
+        MultiAZ: !Ref MultiAZ
+        DatabaseSubnet1: !Ref DatabaseSubnet1
+        DatabaseSubnet2: !Ref DatabaseSubnet2
+        LaunchRDS: !Ref LaunchRDS
+        KmsKeyId: !Ref KMSKey
+
+  EFS:
+    Type: AWS::CloudFormation::Stack
+    Properties:
+      TemplateURL: !Sub https://s3.amazonaws.com/${TemplateS3Bucket}/cft-efs.yaml
+      Parameters:
+        EnvironmentName: !Ref EnvironmentName
+        VPC: !Ref VPC
+        AppSubnet1: !Ref AppSubnet1
+        AppSubnet2: !Ref AppSubnet2
+        AppSubnet3: !Ref AppSubnet3
+        KMSKey: !Ref KMSKey

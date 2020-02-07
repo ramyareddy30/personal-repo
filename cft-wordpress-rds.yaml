@@ -1,0 +1,213 @@
+---
+AWSTemplateFormatVersion: '2010-09-09'
+Description: 'AWS CloudFormation Template ElasticBeanstalk running wordpress'
+Parameters:
+  EnvironmentName:
+    Description: Environment Name
+    Type: String
+    MinLength: '3'
+    MaxLength: '20'
+    Default: development
+    ConstraintDescription: must be a valid string Alphanumeric
+
+  KmsKeyId:
+    Description: "Enter KmsKeyId"
+    Type: String
+
+  VPC: 
+    Type: "AWS::EC2::VPC::Id" 
+    Description: Enter a valid vpc
+    Default: vpc-0b69c067a156de689
+
+  DatabaseUser:
+    Default: dbwordpress
+    Type: String
+    Description: Database admin account name
+    MinLength: 5
+    MaxLength: 16
+    ConstraintDescription: Name must begin with a letter and contain only alphanumeric characters
+
+  DatabasePassword:
+    NoEcho: true
+    Default: wordpress1234
+    Type: String
+    Description: Database admin account password(default to pass1234).
+    MinLength: 5
+    MaxLength: 41
+    ConstraintDescription: Password must contain only alphanumeric characters
+
+  DatabaseName:
+    Default: dbwordpress
+    Type: String
+    Description: Database name
+    MinLength: 1
+    MaxLength: 30
+    ConstraintDescription: Name must begin with a letter and contain only alphanumeric characters
+
+  DatabaseSize:
+    Default: 10
+    Type: String
+    Description: Database storage size in gigabytes (GB) - Not applicable for Aurora
+    MinLength: 1
+    ConstraintDescription: Enter a size of at least 5 GB
+
+  DatabaseInstanceClass:
+    Default: db.t2.micro
+    Type: String
+    Description: "Database instance class, e.g. db.t2.micro (free tier) - Engine support: https://docs.aws.amazon.com/AmazonRDS/latest/UserGuide/Concepts.DBInstanceClass.html"
+    ConstraintDescription: DB instance class.
+    AllowedValues:
+      - db.t2.micro
+      - db.t2.small
+      - db.t2.medium
+      - db.t2.large
+      - db.t2.xlarge
+      - db.t2.2xlarge
+      - db.m4.large
+      - db.m4.xlarge
+      - db.m4.2xlarge
+      - db.m4.4xlarge
+      - db.m4.10xlarge
+      - db.m4.16xlarge
+      - db.r4.large
+      - db.r4.xlarge
+      - db.r4.2xlarge
+      - db.r4.4xlarge
+      - db.r4.8xlarge
+      - db.r4.16xlarge
+
+  MultiAZ:
+    Description: Multi-AZ master database
+    Type: String
+    Default: 'true'
+    AllowedValues: ['true', 'false']
+  DatabaseSubnet1:
+    Type: 'AWS::EC2::Subnet::Id'
+    Description: The list of SubnetIds in your Virtual Private Cloud (VPC)
+    ConstraintDescription: >-
+      must be a list of at least two existing subnets associated with at least
+      two different availability zones. They should be residing in the selected
+      Virtual Private Cloud.
+  DatabaseSubnet2:
+    Type: 'AWS::EC2::Subnet::Id'
+    Description: The list of SubnetIds in your Virtual Private Cloud (VPC)
+    ConstraintDescription: >-
+      must be a list of at least two existing subnets associated with at least
+      two different availability zones. They should be residing in the selected
+      Virtual Private Cloud.
+  LaunchRDS: 
+    Description: Specify true or false.
+    Default: true
+    Type: String
+    AllowedValues: 
+      - true
+      - false
+    ConstraintDescription: must specify true or false.
+
+Conditions: 
+  CreateRDS: !Equals [ !Ref LaunchRDS, true ]
+
+
+Resources:
+  DBSubnetGroup:
+    Type: AWS::RDS::DBSubnetGroup
+    Condition: CreateRDS
+    Properties:
+      DBSubnetGroupDescription: Rds DB subent groups.
+      SubnetIds:
+        - Ref: DatabaseSubnet1
+        - Ref: DatabaseSubnet2
+      Tags:
+        - 
+          Key: Name
+          Value:
+            Fn::Join:
+            - "-"
+            - - Ref: EnvironmentName
+              - db-subnetgroup                
+
+  DbParameterGroup:
+    Type: AWS::RDS::DBParameterGroup
+    Condition: CreateRDS
+    Properties:
+      Description: DbParameters
+      Family: MySQL5.7	
+      Parameters:
+        log_bin_trust_function_creators: 'true'
+        character-set-client-handshake: '0'
+        character_set_server: 'utf8mb4'
+        character_set_client: 'utf8mb4'
+        character_set_database: 'utf8mb4'
+        character_set_results: 'utf8mb4'
+        character_set_connection: 'utf8mb4'
+        collation_server: 'utf8mb4_unicode_ci'
+        collation_connection: 'utf8mb4_unicode_ci'
+
+  RdsInstance:
+    Properties:
+      DBInstanceIdentifier: !Sub ${EnvironmentName}-wp
+      Engine: MySQL
+      EngineVersion: 5.7
+      DBParameterGroupName:
+        Ref: DbParameterGroup
+      StorageEncrypted: true
+      KmsKeyId:
+        Ref: KmsKeyId      
+      DBSubnetGroupName:
+        Ref: DBSubnetGroup
+      PubliclyAccessible: 'false'
+      DBName:
+        Ref: DatabaseName
+      Port: 3306
+      MultiAZ:
+        Ref: MultiAZ
+      MasterUsername:
+        Ref: DatabaseUser
+      DBInstanceClass: !Ref DatabaseInstanceClass
+      VPCSecurityGroups:
+      - Ref: DBSecurityGroup
+      AllocatedStorage: !Ref DatabaseSize
+      MasterUserPassword:
+        Ref: DatabasePassword
+      Tags:
+        - 
+          Key: Name
+          Value:
+            Fn::Join:
+            - "-"
+            - - Ref: EnvironmentName
+              - rds
+    Type: AWS::RDS::DBInstance
+    Condition: CreateRDS
+
+  DBSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Condition: CreateRDS
+    Properties:
+      GroupDescription: Security group for RDS DB Instance.
+      VpcId:
+         Ref: VPC
+      SecurityGroupIngress:
+      - ToPort: '3306'
+        IpProtocol: tcp
+        CidrIp: 10.0.0.0/16
+        FromPort: '3306'
+      GroupDescription: db Security Group
+      Tags:
+        - 
+          Key: Name
+          Value:
+            Fn::Join:
+            - "-"
+            - - Ref: EnvironmentName
+              - db-sg
+
+Outputs:
+  RdsInstanceEndpoint:
+    Value: !GetAtt RdsInstance.Endpoint.Address
+  DatabaseUser: 
+    Value: !Ref DatabaseUser
+  DatabasePassword: 
+    Value: !Ref DatabasePassword
+  DatabaseName:
+    Value: !Ref DatabaseName

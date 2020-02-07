@@ -1,0 +1,270 @@
+AWSTemplateFormatVersion: 2010-09-09
+Description: ElasticsearchDomain resource
+Parameters:
+  VpcCidr:
+    Type: String
+    Description: "CIDR Block to use for VPC"
+    Default: "10.0.0.0/16"
+
+  ElasticsearchVersion:
+    Description: User defined Elasticsearch Version
+    Type: String
+    Default: '6.3'
+    AllowedValues:
+    - 6.3
+    - 6.2
+    - 6.0
+    - 5.3
+    - 5.5
+    - 5.1
+    - 2.3
+    - 1.5  
+  AppName:
+    Description: Application name.
+    Type: String
+    Default: testes
+    AllowedPattern: "^[\\w-]*$"
+    ConstraintDescription: must be a valid string Alphanumeric + _ and -
+
+  Environment:
+    Description: "Enter Env code for prefix, ex: test,stag,stag-srvc,etc."
+    Default: 'stag'
+    Type: String
+
+  EsInstanceType:
+    Type: String
+    Default: 't2.small.elasticsearch'
+    Description: Choose an instance type for your data nodes.
+    AllowedValues:
+    - t2.small.elasticsearch
+    - t2.medium.elasticsearch
+    - m3.medium.elasticsearch
+    - m3.large.elasticsearch
+    - m3.xlarge.elasticsearch
+    - m3.2xlarge.elasticsearch
+    - m4.large.elasticsearch
+    - m4.xlarge.elasticsearch
+    - m4.2xlarge.elasticsearch
+    - m4.4xlarge.elasticsearch
+    - m4.10xlarge.elasticsearch
+    - c4.large.elasticsearch
+    - c4.xlarge.elasticsearch
+    - c4.2xlarge.elasticsearch
+    - c4.4xlarge.elasticsearch
+    - c4.8xlarge.elasticsearch
+    - r3.large.elasticsearch
+    - r3.xlarge.elasticsearch
+    - r3.2xlarge.elasticsearch
+    - r3.4xlarge.elasticsearch
+    - r3.8xlarge.elasticsearch
+    - r4.large.elasticsearch
+    - r4.xlarge.elasticsearch
+    - r4.2xlarge.elasticsearch
+    - r4.4xlarge.elasticsearch
+    - r4.8xlarge.elasticsearch
+    - r4.16xlarge.elasticsearch
+    - i2.xlarge.elasticsearch
+    - i2.2xlarge.elasticsearch
+  ProvisionedIOPS:
+    Type: String
+    Default: 0
+    Description: The provisioned IOPS value must be an integer between 1000 and 16000 if we select storage type as "io1" otherwise it will be 0.
+  HostedZoneId:
+    Description: R53 Hosted Zone ID
+    Type: String
+
+  SecurityGroupName:
+    Type: String
+    Default: elasticsearch-sgtwo
+    Description: Provide security group name to be created
+  Vpcid:
+    Type: "AWS::EC2::VPC::Id"
+    Description: Enter a valid vpc
+#  NumberOfSubnets:
+#    AllowedValues:
+#    - 1
+#    - 2
+#    Default: 1
+#    Description: Number of Subnets, If your domain has zone awareness enabled, you need to provide two subnet IDs, one per zone. Otherwise, provide only one.
+#    Type: String
+  Instancecount:
+    Type: String
+    Default: 1
+    Description: Mention the number of data nodes for your cluster, You must choose an even number of data nodes for a two Availability Zone deployment.
+  AppSubnet1:
+    Type: 'AWS::EC2::Subnet::Id'
+    Description: The list of SubnetIds in your Virtual Private Cloud (VPC)
+    ConstraintDescription: >-
+      must be a list of at least two existing subnets associated with at least
+      two different availability zones. They should be residing in the selected
+      Virtual Private Cloud.
+  AppSubnet2:
+    Type: 'AWS::EC2::Subnet::Id'
+    Description: The list of SubnetIds in your Virtual Private Cloud (VPC)
+    ConstraintDescription: >-
+      must be a list of at least two existing subnets associated with at least
+      two different availability zones. They should be residing in the selected
+      Virtual Private Cloud.
+  EBSVolumeType:
+    Type: String
+    Default: gp2
+    Description: Provide the EBS Volume type.
+    AllowedValues:
+    - "gp2"
+    - "io1"
+    - "standard"
+
+Mappings:
+  EBSVolumeSize:
+    t2.small.elasticsearch:
+      'Size': 35
+    t2.medium.elasticsearch:
+      'Size': 35
+    m3.medium.elasticsearch:
+      'Size': 100
+    m3.large.elasticsearch:
+      'Size': 512
+    m3.xlarge.elasticsearch:
+      'Size': 512
+    m3.2xlarge.elasticsearch:
+      'Size': 512
+    m4.large.elasticsearch:
+      'Size': 512
+    m4.xlarge.elasticsearch:
+      'Size': 1024
+    m4.2xlarge.elasticsearch:
+      'Size': 1524
+    m4.4xlarge.elasticsearch:
+      'Size': 1524
+    m4.10xlarge.elasticsearch:
+      'Size': 1524
+    c4.large.elasticsearch:
+      'Size': 100
+    c4.xlarge.elasticsearch:
+      'Size': 512
+    c4.2xlarge.elasticsearch:
+      'Size': 1024
+    c4.4xlarge.elasticsearch:
+      'Size': 1524
+    c4.8xlarge.elasticsearch:
+      'Size': 1524
+    r3.large.elasticsearch:
+      'Size': 512
+    r3.xlarge.elasticsearch:
+      'Size': 512
+    r3.2xlarge.elasticsearch:
+      'Size': 512
+    r3.4xlarge.elasticsearch:
+      'Size': 512
+    r3.8xlarge.elasticsearch:
+      'Size': 512
+    r4.large.elasticsearch:
+      'Size': 1024
+    r4.xlarge.elasticsearch:
+      'Size': 1524
+    r4.2xlarge.elasticsearch:
+      'Size': 1524
+    r4.4xlarge.elasticsearch:
+      'Size': 1524
+    r4.8xlarge.elasticsearch:
+      'Size': 1524
+    r4.16xlarge.elasticsearch:
+      'Size': 1524
+    i2.xlarge.elasticsearch:
+      'Size': 512
+    i2.2xlarge.elasticsearch:
+      'Size': 512
+Conditions: 
+  NumberOfSubnets1:
+      !Equals [ 1, !Ref Instancecount ]
+Resources:
+  ElasticsearchDomain:
+    Type: 'AWS::Elasticsearch::Domain'
+    Properties:
+      DomainName: !Sub "${AppName}-${Environment}-es"
+      ElasticsearchVersion: !Ref ElasticsearchVersion
+      ElasticsearchClusterConfig:
+        InstanceCount: !Ref Instancecount
+        ZoneAwarenessEnabled: !If [NumberOfSubnets1, false, true]
+        InstanceType: !Ref EsInstanceType
+      EBSOptions:
+        EBSEnabled: 'true'
+        Iops: !Ref ProvisionedIOPS
+        VolumeSize:
+          Fn::FindInMap:
+          - EBSVolumeSize
+          - Ref: EsInstanceType
+          - 'Size'
+#        VolumeSize: !Ref EBSVolumeSize
+        VolumeType: !Ref EBSVolumeType
+      SnapshotOptions:
+        AutomatedSnapshotStartHour: '0'
+      AccessPolicies:
+        Version: 2012-10-17
+        Statement:
+          - Effect: Allow
+            Principal:
+              AWS: '*'
+            Action: 'es:*'
+            Resource: 
+                'Fn::Join': [ '/', ['Fn::Join': [ ':', [ 'arn:aws:es', !Ref 'AWS::Region', !Ref 'AWS::AccountId', 'domain'] ], !Sub '${AppName}-${Environment}-es', '*' ] ]
+      AdvancedOptions:
+        rest.action.multi.allow_explicit_index: 'true'
+      Tags:
+        - Key: Name
+          Value: !Sub "${AppName}-${Environment}-elasticsearch"
+      VPCOptions:
+        SubnetIds:
+          !If
+            [ NumberOfSubnets1,
+            [ !Ref AppSubnet1 ],
+            [ !Ref AppSubnet1, !Ref AppSubnet2 ]
+          ]
+        SecurityGroupIds:
+          - !Ref mySecurityGroup
+  mySecurityGroup:
+    Type: 'AWS::EC2::SecurityGroup'
+    Properties:
+      VpcId: !Ref Vpcid
+      GroupDescription: Elasticsearch security group
+      GroupName: !Ref SecurityGroupName
+      SecurityGroupIngress:
+        - FromPort: '443'
+          IpProtocol: tcp
+          ToPort: '443'
+          CidrIp: !Ref VpcCidr
+        - FromPort: '80'
+          IpProtocol: tcp
+          ToPort: '80'
+          CidrIp: !Ref VpcCidr
+        - FromPort: '443'
+          IpProtocol: tcp
+          ToPort: '443'
+          CidrIp: !Ref VpcCidr
+        - FromPort: '80'
+          IpProtocol: tcp
+          ToPort: '80'
+          CidrIp: !Ref VpcCidr
+
+      Tags:
+        - Key: Name
+          Value: !Sub "${AppName}-${Environment}-elasticsearch-sg"
+
+          #  DNSRedisPrivateRecords:
+          #Type: AWS::Route53::RecordSet
+          #Properties:
+          #HostedZoneId: !Ref 'HostedZoneId'
+          #Comment: DNS name for site.
+          #Name: !Sub "elasticsearch.${AppName}.${Environment}.internal"
+          #Type: CNAME
+          #TTL: '60'
+          #ResourceRecords:
+          #- !GetAtt ElasticsearchDomain.DomainEndpoint
+
+Outputs:
+  DomainArn:
+    Value: !GetAtt ElasticsearchDomain.DomainArn
+  DomainEndpoint:
+    Value: !GetAtt ElasticsearchDomain.DomainEndpoint
+  SecurityGroupId:
+    Value: !Ref mySecurityGroup

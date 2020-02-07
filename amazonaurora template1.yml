@@ -1,0 +1,177 @@
+---
+AWSTemplateFormatVersion: '2010-09-09'
+Description: Aurora RDS stack
+Parameters:
+  DBSubnet1:
+    Description: database subnet 1
+    Type: 'AWS::EC2::Subnet::Id'
+    ConstraintDescription: must be a valida private subnet.
+  DBSubnet2:
+    Description: database subnet 2
+    Type: 'AWS::EC2::Subnet::Id'
+    ConstraintDescription: must be a valida private subnet.
+  BackupRetentionPeriod:
+    Description: "Aurora RDS Automated backups retention period"
+    Type: Number
+  DBSecurityGroup:
+    Description: Select the database security group.
+    Type: AWS::EC2::SecurityGroup::Id
+  AuroraDbType:
+    Description: RDS instance type
+    Type: String
+    ConstraintDescription: must be a valid RDS instance type.
+  AuroraDBUsername:
+    Description: Aurora username
+    Type: String
+    MinLength: '5'
+    MaxLength: '15'
+    AllowedPattern: "[a-zA-Z][a-zA-Z0-9]*"
+    ConstraintDescription: must begin with a letter and contain only alphanumeric characters.
+  AuroraDbPassword:
+    Description: App Db Password
+    NoEcho: 'true'
+    Type: String
+    MinLength: '7'
+    MaxLength: '25'
+    AllowedPattern: "[a-zA-Z0-9]*"
+    ConstraintDescription: Db Password must be 7-25 characters and contain only alpha numeric characters.
+  AuroraDBIdentifierName:
+    Description: The string that will be prefixed to each instance name
+    Type: String
+    MinLength: '3'
+    MaxLength: '25'
+    AllowedPattern: "[a-z0-9]*"
+    ConstraintDescription: Identifier names must be 3-25 characters and contain only a-z and 0-9.
+  EnvironmentName:
+    Description: "Enter Env code for prefix, ex: test,stag,prod,etc."
+    Type: String
+  AuroraMultiAZ:
+    Description: Multi-AZ master database
+    Type: String
+    AllowedValues: ['true', 'false']
+
+Resources:
+  AuroraDBSubnetGroup:
+    Type: AWS::RDS::DBSubnetGroup
+    Properties:
+      DBSubnetGroupDescription: Rds DB subent groups.
+      SubnetIds:
+        - !Ref DBSubnet1
+        - !Ref DBSubnet2
+      Tags:
+        - 
+          Key: Name
+          Value: !Sub "aurora-subnetgroup"
+        - 
+          Key: Environment
+          Value: !Ref "EnvironmentName"
+
+
+  AuroraDBCluster:
+    Type: AWS::RDS::DBCluster
+    Properties:
+      Engine: "aurora-mysql"
+      EngineVersion: "5.7.12"
+      BackupRetentionPeriod: !Ref BackupRetentionPeriod
+      StorageEncrypted: true
+      MasterUsername:
+        Ref: AuroraDBUsername
+      MasterUserPassword:
+        Ref: AuroraDbPassword
+      DBSubnetGroupName:
+        Ref: AuroraDBSubnetGroup
+      VpcSecurityGroupIds:
+      - Ref: DBSecurityGroup
+      DBClusterParameterGroupName:
+        Ref: AuroraDBClusterParameterGroup
+      EnableCloudwatchLogsExports:
+        - error
+        - general
+        - slowquery
+        - audit
+      Tags:
+      - Key: Environment
+        Value: !Ref "EnvironmentName"
+  AuroraRDSinstance:
+    Type: AWS::RDS::DBInstance
+    Properties:
+      DBClusterIdentifier:
+        Ref: AuroraDBCluster
+      DBInstanceIdentifier:
+        Ref: AuroraDBIdentifierName
+      StorageEncrypted: true
+      DBInstanceClass:
+        Ref: AuroraDbType
+      Engine: "aurora-mysql"
+      EngineVersion: "5.7.12"
+      DBParameterGroupName:
+        Ref: AuroraDbParameterGroup
+      DBSubnetGroupName:
+        Ref: AuroraDBSubnetGroup
+      PubliclyAccessible: 'false'
+      Tags:
+        - 
+          Key: Name
+          Value: !Sub "aurora-rds"
+        - 
+          Key: Environment
+          Value: !Ref "EnvironmentName"
+  AuroraRDSReplica:
+    Type: AWS::RDS::DBInstance
+    Properties:
+      DBClusterIdentifier:
+        Ref: AuroraDBCluster
+      DBInstanceClass:
+        Ref: AuroraDbType
+      Engine: "aurora-mysql"
+      DBParameterGroupName:
+        Ref: AuroraDbParameterGroup
+      DBSubnetGroupName:
+        Ref: AuroraDBSubnetGroup
+      Tags:
+        - 
+          Key: Name
+          Value: !Sub "aurora-rds-replica"
+        - 
+          Key: Environment
+          Value: !Ref "EnvironmentName"
+  AuroraDBClusterParameterGroup:
+    Type: AWS::RDS::DBClusterParameterGroup
+    Properties:
+      Description: CloudFormation Sample Aurora Cluster Parameter Group
+      Family: aurora-mysql5.7
+      Parameters:
+        character_set_database: "utf32"
+        slow_query_log: "1"
+        long_query_time: "30"
+        general_log: "1"
+        server_audit_logging: "1"
+        server_audit_logs_upload: "1"
+        log_output: "FILE"
+      Tags:
+      - Key: Environment
+        Value: !Ref "EnvironmentName"
+  AuroraDbParameterGroup:
+    Type: AWS::RDS::DBParameterGroup
+    Properties:
+      Description: DbParameters
+      Family: aurora-mysql5.7
+      Parameters:
+        log_bin_trust_function_creators: 'on'
+      Tags:
+      - Key: Environment
+        Value: !Ref "EnvironmentName"
+
+Outputs:
+  RDSEndPoint:
+    Value: !GetAtt AuroraDBCluster.Endpoint.Address
+  RDSPort:
+    Value: !GetAtt AuroraDBCluster.Endpoint.Port
+  RDSReadEndPoint:
+    Value: !GetAtt AuroraDBCluster.ReadEndpoint.Address
+  RDSSubnetGroup:
+    Value: !Ref AuroraDBSubnetGroup
+  RDSClusterParameterGroup:
+    Value: !Ref AuroraDBClusterParameterGroup
+  RDSDBParameterGroup:
+    Value: !Ref AuroraDbParameterGroup

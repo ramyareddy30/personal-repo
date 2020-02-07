@@ -1,0 +1,93 @@
+---
+AWSTemplateFormatVersion: '2010-09-09'
+Description: 'AWS CloudFormation Template ElasticBeanstalk running wordpress'
+Parameters:
+  EnvironmentName:
+    Description: Environment Name
+    Type: String
+    MinLength: '3'
+    MaxLength: '20'
+    Default: development
+    ConstraintDescription: must be a valid string Alphanumeric
+  KMSKey:
+    Description: KMS Key ID.
+    Type: String
+    Default: c28d588f-9993-4947-9e17-970e5e05b73c   
+  AppSubnet1:
+    Type: 'AWS::EC2::Subnet::Id'
+    Default: subnet-8b9463f2
+    Description: The list of SubnetIds in your Virtual Private Cloud (VPC)
+    ConstraintDescription: >-
+      must be a list of at least two existing subnets associated with at least
+      two different availability zones. They should be residing in the selected
+      Virtual Private Cloud.
+  AppSubnet2:
+    Type: 'AWS::EC2::Subnet::Id'
+    Default: subnet-3f120477
+    Description: The list of SubnetIds in your Virtual Private Cloud (VPC)
+    ConstraintDescription: >-
+      must be a list of at least two existing subnets associated with at least
+      two different availability zones. They should be residing in the selected
+      Virtual Private Cloud.
+  AppSubnet3:
+    Type: 'AWS::EC2::Subnet::Id'
+    Default: subnet-3f120477
+    Description: The list of SubnetIds in your Virtual Private Cloud (VPC)
+    ConstraintDescription: >-
+      must be a list of at least two existing subnets associated with at least
+      two different availability zones. They should be residing in the selected
+      Virtual Private Cloud.
+  VPC: 
+    Type: "AWS::EC2::VPC::Id"
+    Description: Enter a valid vpc.
+    Default: vpc-81cc7ef8
+
+Resources:
+  EFS:
+    Type: AWS::EFS::FileSystem
+    Properties: 
+      Encrypted: true
+      FileSystemTags:
+      - Key: Name
+        Value: !Sub ${EnvironmentName}-efs
+      KmsKeyId: !Ref KMSKey
+      PerformanceMode: generalPurpose
+  MountTarget1:
+    Type: AWS::EFS::MountTarget
+    Properties:
+      FileSystemId:
+        Ref: EFS
+      SubnetId: !Ref AppSubnet1
+      SecurityGroups:
+      - Ref: MountTargetSecurityGroup
+  MountTarget2:
+    Type: AWS::EFS::MountTarget
+    Properties:
+      FileSystemId:
+        Ref: EFS
+      SubnetId: !Ref AppSubnet2
+      SecurityGroups:
+      - Ref: MountTargetSecurityGroup    
+  MountTarget3:
+    Type: AWS::EFS::MountTarget
+    Properties:
+      FileSystemId:
+        Ref: EFS
+      SubnetId: !Ref AppSubnet3
+      SecurityGroups:
+      - Ref: MountTargetSecurityGroup         
+  MountTargetSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      VpcId: 
+        Ref: VPC
+      GroupDescription: Security group for mount target
+      SecurityGroupIngress:
+      - IpProtocol: tcp
+        FromPort: '2049'
+        ToPort: '2049'
+        CidrIp: 10.0.0.0/16
+
+Outputs:
+  FILESYSTEMID:
+    Value: !Ref EFS
